@@ -1,8 +1,12 @@
 
 
+#git add . && git commit -m "Update" && git push
 
+#
+#
+#
 DATE=`date`
-
-echo $DATE
-
-git add . && git commit -m "$DATE" && git push
+WHO=`whoami`
+git add . 
+git commit -m "$WHO $DATE"
+git push
