@@ -7,9 +7,9 @@ from sklearn.model_selection import (GridSearchCV, KFold, cross_val_predict,
                                      TimeSeriesSplit, cross_val_score, 
                                      LeaveOneOut, KFold, StratifiedKFold,
                                      cross_val_predict,train_test_split)
-from sklearn.metrics import r2_score, mean_squared_error
-from sklearn.metrics.regression import mean_squared_error, mean_absolute_error, median_absolute_error
-from sklearn.metrics.classification import accuracy_score, f1_score, precision_score
+from sklearn.metrics import r2_score, mean_squared_error, make_scorer
+from sklearn.metrics import mean_squared_error, mean_absolute_error, median_absolute_error
+from sklearn.metrics import accuracy_score, f1_score, precision_score
 from sklearn.decomposition import KernelPCA
 from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures, MaxAbsScaler, Normalizer, StandardScaler, MaxAbsScaler, FunctionTransformer, QuantileTransformer
 from sklearn.pipeline import Pipeline
@@ -70,16 +70,32 @@ else:
     run0, n_runs = 0,10
 
 #%%----------------------------------------------------------------------------   
-def accuracy_log(y_true, y_pred):
-    y_true=np.abs(np.array(y_true))
-    y_pred=np.abs(np.array(y_pred))
-    return (np.abs(np.log10(y_true/y_pred))<0.3).sum()/len(y_true)*100
 
-def rms(y_true, y_pred):
-    y_true=np.abs(np.array(y_true))
-    y_pred=np.abs(np.array(y_pred))
-    return ( (np.log10(y_pred/y_true)**2).sum()/len(y_true) )**0.5
+def rmse(evaluation, simulation):
+    """
+    Root Mean Squared Error
 
+        .. math::
+
+         RMSE=\\sqrt{\\frac{1}{N}\\sum_{i=1}^{N}(e_{i}-s_{i})^2}
+
+    :evaluation: Observed data to compared with simulation data.
+    :type: list
+
+    :simulation: simulation data to compared with evaluation data
+    :type: list
+
+    :return: Root Mean Squared Error
+    :rtype: float
+    """
+    if len(evaluation) == len(simulation):
+        obs, sim = np.array(evaluation), np.array(simulation)
+        mse = np.nanmean((obs - sim)**2)
+        return mse**(0.5)
+    else:
+        logging.warning("evaluation and simulation lists does not have the same length.")
+        return np.nan
+    
 def model_base_evaluation(x, data_args, estimator_args,
                           normalizer_args, transformer_args):
     
@@ -162,9 +178,8 @@ def model_base_evaluation(x, data_args, estimator_args,
   if flag=='eval':
     #try:
         if task=='regression':
-            y_p  = cross_val_predict(model,X_train[:,ft], y_train, cv=cv, n_jobs=1)
-            r = -kge(y_p, y_train)[0][0]**1
-            #r = mean_squared_error(y_p, y_train)#**.5
+            #r= -cross_val_score(model,X_train[:,ft], y_train, cv=cv,scoring=make_scorer(rmse, greater_is_better=False),n_jobs=-1).mean()
+            r= -cross_val_score(model,X_train[:,ft], y_train, cv=cv,scoring=scoring,n_jobs=-1).mean()
         elif task=='forecast':
             r=cross_val_score(model,X_train[:,ft], y_train, cv=cv, n_jobs=1, scoring=scoring)
             r=np.abs(r).mean()
@@ -1127,24 +1142,18 @@ import glob as gl
 import pylab as pl
 import os
 
-basename='naula__'
+basename='cb_daily_'
 
 #%%
 from read_data import *
 datasets = [
-                read_data_naula(model=1),
-                read_data_naula(model=2),
-                read_data_naula(model=3),
-                read_data_naula(model=4),
-                read_data_naula(model=5),
-                read_data_naula(model=6),
-                read_data_naula(model=7),
+            read_data_cahora_bassa_sequence(look_back=7, look_forward=7, kind='ml', unit='day',roll=True, window=5, scale=False),
             ]
      
 #%%----------------------------------------------------------------------------   
 pd.options.display.float_format = '{:.3f}'.format
 
-pop_size    = 16
+pop_size    = 20
 max_iter    = 30
 n_splits    = 5
 scoring     = 'neg_mean_squared_error'
@@ -1271,10 +1280,10 @@ for run in range(run0, n_runs):
                     n_samples_train, n_samples_test, n_features)
             #------------------------------------------------------------------         
             optimizers=[             
-                ('EN'   ,  lb_en,  ub_en,  fun_en_fs, args, random_seed,),    # OK
-                ('ELM'  , lb_elm, ub_elm, fun_elm_fs, args, random_seed,),    # OK
-                ('SVR'  , lb_svr, ub_svr, fun_svr_fs, args, random_seed,),    # OK
-                ('RBF'  , lb_rbf, ub_rbf, fun_rbf_fs, args, random_seed,),    # OK
+                #('EN'   ,  lb_en,  ub_en,  fun_en_fs, args, random_seed,),    # OK
+                #('ELM'  , lb_elm, ub_elm, fun_elm_fs, args, random_seed,),    # OK
+                #('SVR'  , lb_svr, ub_svr, fun_svr_fs, args, random_seed,),    # OK
+                #('RBF'  , lb_rbf, ub_rbf, fun_rbf_fs, args, random_seed,),    # OK
                 ('LSSVR', lb_lss, ub_lss, fun_lss_fs, args, random_seed,),    # OK
                 ('GPR'  , lb_gpr, ub_gpr, fun_gpr_fs, args, random_seed,),    # OK            
                 ('XGB'  , lb_xgb, ub_xgb, fun_xgb_fs, args, random_seed,),    # OK
@@ -1286,15 +1295,6 @@ for run in range(run0, n_runs):
                 #('SVM'  , lb_svm, ub_svm, fun_svm_fs, args, random_seed,),    # OK
                 #('MLP'  , lb_mlp, ub_mlp, fun_mlp_fs, args, random_seed,),
                 #
-                #('PR'   , lb_pr,  ub_pr,  fun_pr_fs, args, random_seed,),     # OK
-                #('DT'   ,  lb_dt,  ub_dt,  fun_dt_fs, args, random_seed,),
-                #('KRR'  , lb_krr, ub_krr, fun_krr_fs, args, random_seed,),    # OK
-                #('HGB'  , lb_hgb, ub_hgb, fun_hgb_fs, args, random_seed,),    # OK
-                #('VR'   ,  lb_vr,  ub_vr,  fun_vr_fs, args, random_seed,),    # OK
-                #('VC'   , lb_vc , ub_vc , fun_vc_fs , args, random_seed,),
-                #('BAG'  , lb_bag, ub_bag, fun_bag_fs, args, random_seed,),
-                #('RXE'  , lb_rxe, ub_rxe, fun_rxe_fs, args, random_seed,),    # OK
-                #('CAT'  , lb_cat, ub_cat, fun_cat_fs, args, random_seed,),
                 ]
             #------------------------------------------------------------------         
             for (clf_name, lb, ub, fun, args, random_seed) in optimizers:
@@ -1312,11 +1312,11 @@ for run in range(run0, n_runs):
                 #algo = pg.algorithm(pg.de(gen = max_iter, variant = 1, seed=random_seed))
                 #algo = pg.algorithm(pg.pso(gen = max_iter, seed=random_seed))
                 #algo = pg.algorithm(pg.ihs(gen = max_iter*pop_size, seed=random_seed))
-                #algo = pg.algorithm(pg.gwo(gen = max_iter, seed=random_seed))
+                algo = pg.algorithm(pg.gwo(gen = max_iter, seed=random_seed))
                 #algo = pg.algorithm(pg.sea(gen = max_iter, seed=random_seed))
                 #algo = pg.algorithm(pg.sade(gen = max_iter, seed=random_seed))
                 #algo = pg.algorithm(pg.sga(gen = max_iter, m=0.20, cr=0.95, crossover = "single", mutation = "uniform", seed=random_seed))
-                algo = pg.algorithm(pg.cmaes(gen = max_iter, force_bounds = True, seed=random_seed))
+                #algo = pg.algorithm(pg.cmaes(gen = max_iter, force_bounds = True, seed=random_seed))
                 #algo = pg.algorithm(pg.xnes(gen = max_iter, memory=False, force_bounds = True, seed=random_seed))
                 #algo = pg.algorithm(pg.simulated_annealing(Ts=100., Tf=1e-5, n_T_adj = 100, seed=random_seed))
                 
@@ -1362,42 +1362,39 @@ for run in range(run0, n_runs):
 #                pl.axes().set_aspect('equal', )
 #                pl.show()
                 
-#                if n_samples_test > 0:    
-#                    pl.figure()#(random_seed+1)
-#                    #pl.plot(sim['Y_TEST_TRUE'].ravel(), 'r-', sim['Y_TEST_PRED'].ravel(), 'b-' )
-#                    pl.plot(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_TRUE'].ravel(), 'r-', 
-#                            sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel(), 'b.' )
-#                    r2=r2_score(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())
-#                    r=stats.pearsonr(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())[0]
-#                    rmse=RMSE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
-#                    rmsl=rms(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())     
-#                    mape=MAPE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())   
-#                    acc=accuracy_log(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
-#                    pl.ylabel(dataset_name)
-#                    pl.title(sim['EST_NAME']+': (Testing) R$^2$='+str('%1.3f' % r2)+'\t RMSE='+str('%1.3f' % rmse)
-#                                  +'\t MAPE ='+str('%1.3f' % mape)
-#                              #+', '.join(sim['ACTIVE_VAR_NAMES'])
-#                              )
-#                    pl.axes().set_aspect('equal', )
-#                    pl.show()
-#                    
-#                    if task=='forecast' or task=='regression':
-#                        pl.figure(figsize=(16,4)); 
-#                        #s = y_test.argsort()
-#                        s = range(len(y_test))
-#                        pl.plot(sim['Y_TEST_TRUE'][s].ravel(), 'r-o', label='Real data',)
-#                        pl.plot(sim['Y_TEST_PRED'][s].ravel(), 'b-o', label='Predicted',)
-#                        r2=r2_score(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())
-#                        r=stats.pearsonr(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())[0]
-#                        rmse=RMSE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
-#                        acc=accuracy_log(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
-#                        pl.legend(); pl.title(dataset_name+' -- '+target+'\nRMSE = '+str(rmse)+', '+'R$^2$ = '+str(r2)+', '+'R = '+str(r))
-#                        pl.ylabel(dataset_name)
-#                        pl.title(sim['EST_NAME']+': (Testing) R$^2$='+str('%1.3f' % r2)+'\t RMSE='+str('%1.3f' % rmse)
-#                                    +'\t MAPE ='+str('%1.3f' % mape)
-#                                  #+', '.join(sim['ACTIVE_VAR_NAMES'])
-#                                  )
-#                        pl.show()                                                        
+                if n_samples_test > 0:    
+                    pl.figure()#(random_seed+1)
+                    #pl.plot(sim['Y_TEST_TRUE'].ravel(), 'r-', sim['Y_TEST_PRED'].ravel(), 'b-' )
+                    pl.plot(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_TRUE'].ravel(), 'r-', 
+                            sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel(), 'b.' )
+                    r2=r2_score(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())
+                    r=stats.pearsonr(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())[0]
+                    rmse=RMSE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
+                    mape=MAPE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())   
+                    pl.ylabel(dataset_name)
+                    pl.title(sim['EST_NAME']+': (Testing) R$^2$='+str('%1.3f' % r2)+'\t RMSE='+str('%1.3f' % rmse)
+                                  +'\t MAPE ='+str('%1.3f' % mape)
+                              #+', '.join(sim['ACTIVE_VAR_NAMES'])
+                              )
+                    pl.axes().set_aspect('equal', )
+                    pl.show()
+                    
+                    if task=='forecast' or task=='regression':
+                        pl.figure(figsize=(16,4)); 
+                        #s = y_test.argsort()
+                        s = range(len(y_test))
+                        pl.plot(sim['Y_TEST_TRUE'][s].ravel(), 'r-.', label='Real data',)
+                        pl.plot(sim['Y_TEST_PRED'][s].ravel(), 'b-.', label='Predicted',)
+                        r2=r2_score(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())
+                        r=stats.pearsonr(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())[0]
+                        rmse=RMSE(sim['Y_TEST_TRUE'].ravel(), sim['Y_TEST_PRED'].ravel())                
+                        pl.legend(); pl.title(dataset_name+' -- '+target+'\nRMSE = '+str(rmse)+', '+'R$^2$ = '+str(r2)+', '+'R = '+str(r))
+                        pl.ylabel(dataset_name)
+                        pl.title(sim['EST_NAME']+': (Testing) R$^2$='+str('%1.3f' % r2)+'\t RMSE='+str('%1.3f' % rmse)
+                                    +'\t MAPE ='+str('%1.3f' % mape)
+                                  #+', '.join(sim['ACTIVE_VAR_NAMES'])
+                                  )
+                        pl.show()                                                        
                     
                 sim['RUN']=run;
                 sim['DATASET_NAME']=dataset_name; 

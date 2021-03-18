@@ -9,7 +9,7 @@ from scipy.sparse import linalg
 __all__ = ['LSSVR', 'RegENN_LSSVR', 'RegCNN_LSSVR', 'DiscENN_LSSVR', 'MI_LSSVR', 'AM_LSSVR', 'NL_LSSVR']
 
 class LSSVR(BaseEstimator, RegressorMixin):
-    def __init__(self, C=100, kernel='rbf', gamma=0.1, l=1):
+    def __init__(self, C=100, kernel='rbf', gamma=0.1,):
         self.supportVectors      = None
         self.supportVectorLabels = None
         self.C = C
